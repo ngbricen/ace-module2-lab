@@ -18,6 +18,31 @@ export function b2bOrder () {
     if (utils.isChallengeEnabled(challenges.rceChallenge) || utils.isChallengeEnabled(challenges.rceOccupyChallenge)) {
       const orderLinesData = body.orderLinesData || ''
       try {
+        let isJson = false
+        try {
+          JSON.parse(orderLinesData)
+          isJson = true
+        } catch {}
+
+        if (!isJson) {
+          let unescaped = String(orderLinesData)
+          try {
+            unescaped = decodeURIComponent(unescaped)
+          } catch {}
+          unescaped = unescaped
+            .replace(/\\u\{?([0-9a-fA-F]+)\}?/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+            .replace(/\\x([0-9a-fA-F]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+            .replace(/\\([0-7]{1,3})/g, (_, oct) => String.fromCharCode(parseInt(oct, 8)))
+
+          if (
+            /(?:constructor|__proto__|prototype|process|mainModule|require|child_process|execSync|spawn|Reflect|getPrototypeOf|fromCharCode)/i.test(unescaped) ||
+            /\b(?:Function|global|globalThis)\b/.test(unescaped) ||
+            /\[\s*['"`]/.test(unescaped)
+          ) {
+            throw new Error('Sandbox breakout attempt detected')
+          }
+        }
+
         const sandbox = { safeEval, orderLinesData }
         vm.createContext(sandbox)
         vm.runInContext('safeEval(orderLinesData)', sandbox, { timeout: 2000 })
